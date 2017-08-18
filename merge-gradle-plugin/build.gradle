@@ -4,6 +4,7 @@ apply plugin: 'maven'
 dependencies {
     compile gradleApi()
     compile localGroovy()
+    compile 'com.android.tools.build:gradle:2.2.2'
     compile 'net.lingala.zip4j:zip4j:1.3.2'
 }
 

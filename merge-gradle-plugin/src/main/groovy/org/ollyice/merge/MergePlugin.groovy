@@ -12,8 +12,12 @@ class MergePlugin implements Plugin<Project>{
 
     @Override
     void apply(Project project) {
-        print("MergePlugin loaded")
         project.extensions.create(MERGE_EXTENSION, MergeExtension.class)
-        project.gradle.addListener(new MergeListener(project))
+        if (project.plugins.hasPlugin(com.android.build.gradle.AppPlugin)) {
+            print('registerTransform success\n')
+            AppExtension android = project.extensions.getByType(AppExtension)
+            android.registerTransform(new MergeTransform(project))
+        }
+
     }
 }

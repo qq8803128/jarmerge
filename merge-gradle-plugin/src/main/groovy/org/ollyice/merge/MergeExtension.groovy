@@ -2,7 +2,7 @@ package org.ollyice.merge;
 
 class MergeExtension{
     boolean enabled;
-    boolean log;
+    boolean log = true;
     /*
     path priority list
     when you compile the project
@@ -28,6 +28,7 @@ class MergeExtension{
     List<String> vagueUniques = new ArrayList<>();
 
     /**/
+    @Deprecated
     List<String> tasks = new ArrayList<>();
 
     MergeExtension() {
@@ -72,6 +73,7 @@ class MergeExtension{
         log = enabled;
     }
 
+    @Deprecated
     def void task(String t){
         if (!tasks.contains(t)){
             tasks.add(t)
