@@ -1,0 +1,42 @@
+apply plugin: 'groovy'
+apply plugin: 'maven'
+
+dependencies {
+    compile gradleApi()
+    compile localGroovy()
+    compile 'net.lingala.zip4j:zip4j:1.3.2'
+}
+
+repositories {
+    mavenCentral()
+}
+
+sourceCompatibility = "1.7"
+targetCompatibility = "1.7"
+
+def RELEASE_GROUP_ID = 'org.ollyice.gradle'
+def RELEASE_ARTIFACT_ID = 'merge-gradle-plugin'
+def RELEASE_VERSION = '1.0.9'
+
+uploadArchives{
+    repositories.mavenDeployer{
+        repository(url:'file://E:/mavenCentral/repo')
+        pom.groupId = RELEASE_GROUP_ID
+        pom.artifactId = RELEASE_ARTIFACT_ID
+        pom.version = RELEASE_VERSION
+    }
+}
+
+
+apply plugin: 'com.novoda.bintray-release'
+publish {
+    userOrg = 'qq8803128'//bintray.com用户名
+    groupId = RELEASE_GROUP_ID//jcenter上的路径
+    artifactId = RELEASE_ARTIFACT_ID//项目名称
+    publishVersion = RELEASE_VERSION//版本号
+    desc = 'merge sam class files in jar'//描述，不重要
+    website = 'https://github.com/qq8803128/jarmerge'
+    bintrayUser = 'qq8803128'
+    bintrayKey = 'a84f1f57c0aaa6ea1f50c6fcdc722fc3eab60e70'
+    dryRun = false
+}
