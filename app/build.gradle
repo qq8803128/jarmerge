@@ -20,4 +20,254 @@ android {
 
 dependencies {
     compile 'com.android.support:appcompat-v7:25.3.1'
+    compile files('libs/retrofit.jar')
+    compile files('libs/retrofit2.jar')
 }
+
+
+import com.android.build.api.transform.*
+import com.android.build.gradle.AppExtension
+import com.android.build.gradle.internal.pipeline.TransformManager
+import org.apache.commons.codec.digest.DigestUtils
+import org.apache.commons.io.FileUtils
+import net.lingala.zip4j.core.ZipFile
+
+def MERGE_EXTENSION = "merge"
+
+public class MergeExtension {
+    boolean enabled;
+    boolean log;
+    /*
+    path priority list
+    when you compile the project
+    this plugin will sort input jars
+     */
+    List<String> prioritys = new ArrayList<>();
+
+    /*
+    deletes files list
+    when you comile the project
+    this plugin will delete *.class in this list
+     */
+    List<String> deletes = new ArrayList<>();
+    List<String> vagueDeletes = new ArrayList<>();
+
+    /*
+    unique class files list
+    when you compile the project
+    this plugin will retain the first class in unique list and delete others
+    it can solve multidex class exception
+     */
+    List<String> uniques = new ArrayList<>();
+    List<String> vagueUniques = new ArrayList<>();
+
+    MergeExtension() {
+        super()
+    }
+
+    def void delete(String path) {
+        if (path.endsWith("**")) {
+            if (!vagueDeletes.contains(path)) {
+                vagueDeletes.add(path)
+            }
+        } else {
+            if (!deletes.contains(path)) {
+                deletes.add(path)
+            }
+        }
+    }
+
+    def void unique(String path) {
+        if (path.endsWith("**")) {
+            if (!vagueUniques.contains(path)) {
+                vagueUniques.add(path)
+            }
+        } else {
+            if (!uniques.contains(path)) {
+                uniques.add(path)
+            }
+        }
+    }
+
+    def void priority(String path) {
+        if (!prioritys.contains(path)) {
+            prioritys.add(path)
+        }
+    }
+
+    def void enabled(boolean enabled) {
+        this.enabled = enabled;
+    }
+
+    def void log(boolean enabled) {
+        log = enabled;
+    }
+}
+
+public class MergeTransform extends Transform {
+    MergeExtension extension
+
+    MergeTransform(Project project) {
+        super()
+        extension = project.extensions.getByName("merge")
+    }
+
+    @Override
+    String getName() {
+        return "MultiClassMergeTransform"
+    }
+
+    @Override
+    Set<QualifiedContent.ContentType> getInputTypes() {
+        return TransformManager.CONTENT_JARS
+    }
+
+    @Override
+    Set<QualifiedContent.Scope> getScopes() {
+        return TransformManager.SCOPE_FULL_PROJECT
+    }
+
+    @Override
+    boolean isIncremental() {
+        return false
+    }
+
+    @Override
+    void transform(TransformInvocation transformInvocation) throws TransformException, InterruptedException, IOException {
+        if (!extension || !extension.enabled) {
+            super.transform(transformInvocation)
+        } else {
+            processTransform(transformInvocation)
+        }
+    }
+
+    void processTransform(TransformInvocation transformInvocation) {
+        List<String> jars = new ArrayList<>()
+        Map<String,JarInput> jarmap = new HashMap<>()
+        transformInvocation.inputs.each {
+            it.directoryInputs.each { DirectoryInput directoryInput ->
+                File dest = transformInvocation.outputProvider.getContentLocation(directoryInput.name,
+                        directoryInput.contentTypes, directoryInput.scopes,
+                        Format.DIRECTORY)
+                FileUtils.copyDirectory(directoryInput.file, dest)
+            }
+            it.jarInputs.each {JarInput jarInput->
+                print(jarInput.file.absolutePath + '\n')
+                jars.add(jarInput.file.absolutePath)
+                jarmap.put(jarInput.file.absolutePath,jarInput)
+            }
+        }
+        jars = sortJar(jars)
+        List<String> outputJars = new ArrayList<>()
+        jars.each {
+            File jarInput = new File(it)
+            String jarName = jarInput.name
+            String outputName = DigestUtils.md5Hex(jarInput.getAbsolutePath())
+            File jarOutput = transformInvocation.outputProvider.getContentLocation(outputName,
+                    jarmap.get(it).contentTypes, jarmap.get(it).scopes, Format.JAR)
+            FileUtils.copyFile(jarInput, jarOutput)
+            outputJars.add(jarOutput.absolutePath)
+        }
+
+        outputJars.each {
+            ZipFile zipFile = new ZipFile(it)
+            List<String> deletes = new ArrayList<>()
+            zipFile.getFileHeaders().each {
+                if (it.getFileName().endsWith('.class') || it.getFileName().endsWith('.CLASS')) {
+                    String className = getClassName(it.getFileName())
+                    if (needDelete(className)) {
+                        deletes.add(it.getFileName())
+                    }
+                }
+            }
+
+            deletes.each {
+                print 'delete ' + getClassName(it) + '\n'
+                zipFile.removeFile(it)
+            }
+        }
+    }
+
+    String getClassName(String path) {
+        return path.replaceAll('.class', '').replaceAll('/', '.')
+    }
+
+    boolean needDelete(String className) {
+        boolean retn = false
+        extension.vagueDeletes.each {
+            String s = it.replaceAll('\\*\\*', '')
+            if (className.startsWith(s)) {
+                if (!extension.removes.contains(className)) {
+                    extension.removes.add(className)
+                }
+            }
+        }
+        extension.deletes.each {
+            String name = it
+            if (name.equals(className)) {
+                retn = true
+                return
+            }
+            retn = false
+            return
+        }
+        if (retn) return true
+
+        extension.vagueUniques.each {
+            String s = it.replaceAll('\\*\\*', '')
+            if (className.startsWith(s)) {
+                if (!extension.uniques.contains(className)) {
+                    extension.uniques.add(className)
+                }
+            }
+        }
+        extension.uniques.each {
+            String s = it
+            if (s.equalsIgnoreCase(className)) {
+                if (!extension.deletes.contains(s)) {
+                    extension.deletes.add(s)
+                } else {
+                    retn = true
+                }
+            }
+        }
+        return retn
+    }
+
+    List<String> sortJar(List<String> jars){
+        List<String> list = new ArrayList<>()
+        List<String> temp = new ArrayList<>()
+        extension.prioritys.each {
+            String filter = it
+            jars.each {
+                if (it.contains(filter)){
+                    list.add(it)
+                }else{
+                    temp.add(it)
+                }
+            }
+        }
+        list.addAll(temp)
+        if (list.size() != jars.size()){
+            list.addAll(jars)
+        }
+        return list
+    }
+}
+
+project.extensions.create(MERGE_EXTENSION, MergeExtension.class)
+
+merge{
+    enabled true
+    priority('retrofit.jar')
+    unique('retrofit2.ServiceMethod**')
+    unique('retrofit2.OkHttpCall**')
+}
+
+if (project.plugins.hasPlugin(com.android.build.gradle.AppPlugin)) {
+    print('registerTransform success\n')
+    AppExtension android = project.extensions.getByType(AppExtension)
+    android.registerTransform(new MergeTransform(project))
+}
+
+
