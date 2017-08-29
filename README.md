@@ -28,6 +28,7 @@ merge{
   
   unique('retrofit2.OkHttpCall**')
   
+  
   unique('retrofit2.converter.gson.GsonResponseBodyConverter**') 
   
   unique('retrofit2.ServiceMethod**')
