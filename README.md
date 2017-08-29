@@ -25,6 +25,7 @@ merge{
   
   //unique是如果多个jar中有相同的class  将优先保留priority中的相同的class文件  删除其他的jar中的class文件
   //delete是删除所有jar中的class文件
+  
   unique('retrofit2.OkHttpCall**')
   
   unique('retrofit2.converter.gson.GsonResponseBodyConverter**') 
