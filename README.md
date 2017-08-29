@@ -1,0 +1,1 @@
+一个可以配置删除第三方jar库中的class文件的android gradle插件
